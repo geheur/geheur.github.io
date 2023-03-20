@@ -1,7 +1,99 @@
 <html>
+	<script>
+		var version = null;
+		var manifests = null;
+		var enabledPlugins = [];
+		var disabledPlugins = [];
+
+		function httpRequest(url, listener) {
+			const Http = new XMLHttpRequest();
+			Http.open("GET", url);
+			Http.addEventListener('load', () => listener(Http));
+			Http.send();
+		}
+
+		httpRequest('https://static.runelite.net/bootstrap.json', (response) => {
+			var bootstrap = JSON.parse(response.responseText);
+			version = bootstrap['client']['version'];
+			document.getElementById('runeliteVersion').innerHTML = version;
+
+			httpRequest('https://repo.runelite.net/plugins/' + version + '/manifest.js', (response) => {
+				var response = response.responseText
+				response = response.substring(response.indexOf('[{'));
+				manifests = JSON.parse(response);
+				// document.getElementById('test').innerHTML = response;
+			});
+		});
+
+		var disabledPluginLoopCount = 0;
+		var disabledPluginLoopDone = false;
+		var pluginsCheckedForDisabled = 0;
+
+		function checkDone() {
+			// console.log((manifests == null) + " " + pluginsCheckedForDisabled + " " + disabledPluginLoopCount + " " + disabledPluginLoopDone);
+			if (manifests == null || pluginsCheckedForDisabled != disabledPluginLoopCount || !disabledPluginLoopDone) return;
+			console.log('done');
+			var brokenPlugins = 'Broken plugins:<br>';
+			for (const i in enabledPlugins) {
+				var found = false;
+				for (const j in manifests) {
+					if (manifests[j].internalName == enabledPlugins[i]) {
+						found = true;
+						break;
+					}
+				}
+				if (!found) {
+					brokenPlugins += enabledPlugins[i] + '<br>';
+				}
+			}
+			document.getElementById('bla').innerHTML = brokenPlugins;
+			// var disabledPluginList = 'Disabled plugins:\n';
+			// for (const i in disabledPlugins) {
+				// disabledPluginList += disabledPlugins[i] + '\n';
+			// }
+			// document.getElementById('test').innerHTML = disabledPluginList;
+		}
+
+		function checkPluginDisabled(internalName) {
+			// console.log('check disabled ' + internalName);
+			disabledPluginLoopCount++;
+			httpRequest('https://raw.githubusercontent.com/runelite/plugin-hub/master/plugins/' + internalName, (response) => {
+				var fileContents = response.responseText;
+				var lines = fileContents.split('\n');
+				var disabled = false;
+				for (i in lines) {
+					if (lines[i].startsWith('disabled=')) {
+						// console.log("is disabled");
+						disabledPlugins.push(internalName);
+						disabled = true;
+						break;
+					}
+				}
+				if (!disabled) enabledPlugins.push(internalName);
+				pluginsCheckedForDisabled++;
+				document.getElementById('bla').innerHTML = pluginsCheckedForDisabled;
+				checkDone();
+			});
+		}
+
+		httpRequest('https://api.github.com/repos/runelite/plugin-hub/git/trees/master?recursive=1', (response) => {
+			var content = JSON.parse(response.responseText);
+			var tree = content.tree;
+			for (const i in tree) {
+				if (!tree[i].path.startsWith('plugins/')) continue;
+				// console.log(tree[i].path);
+				checkPluginDisabled(tree[i].path.substring(8));
+			}
+			disabledPluginLoopDone = true;
+			checkDone();
+		});
+	</script>
 <head>
 </head>
 <body>
-test
+	<p><a href="https://geheur.github.io/phubbroken.html">Click here for faster version</a></p>
+	RuneLite version: <span id="runeliteVersion">Loading...</span>
+	<p id="bla"></p>
+	<p id="test"></p>
 </body>
 </html>

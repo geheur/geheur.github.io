@@ -1,0 +1,133 @@
+<html>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
+<head>
+</head>
+<body>
+	<p>RuneLite version: <span id="runeliteVersion">Loading...</span></p>
+	<p>Broken plugins:</p>
+	<p id="bla">Loading...</p>
+	<p id="test"></p>
+	<p>Last build: <span id="lastBuild">Loading...</span></p>
+	<script>
+var runeliteVersion = null;
+var manifests = null;
+var brokenPlugins = new Set();
+var disabledPlugins = new Map();
+var manifestPlugins = new Set();
+
+async function loadLastBuildLog() {
+	let i = 1;
+	let lastBuild = null;
+	outer:
+	while (i <= 20) {
+		document.getElementById('lastBuild').innerHTML = 'Loading: requesting actions ' + ((i - 1) * 100 + 1) + '-' + (i * 100) + '...';
+		console.log('requesting actions page ' + i + ' (100 per page)');
+		const page = await $.get({
+			url: 'https://api.github.com/repos/runelite/plugin-hub/actions/runs?per_page=100&page=' + i,
+			datatype: 'application/json'
+		});
+		for (let i in page['workflow_runs']) {
+			const workflowRun = page['workflow_runs'][i];
+			console.log('author: ' + workflowRun['head_commit']['author']['name']);
+			if (workflowRun['head_commit']['author']['name'] == "RuneLite updater") {
+				lastBuild = workflowRun;
+				break outer;
+			}
+		}
+		i++;
+	}
+	if (lastBuild == null) {
+		document.getElementById('lastBuild').innerHTML = 'Could not find a workflow run for a commit by "RuneLite updater" in the last 2000 workflow runs.'
+		return;
+	}
+	console.log('last build: ' + lastBuild['id']);
+	const lastBuildData = await $.get({
+		url: 'https://api.github.com/repos/runelite/plugin-hub/actions/runs/' + lastBuild['id'] + '/jobs',
+		datatype: 'application/json'
+	});
+	let buildJob = null;
+	for (let i in lastBuildData['jobs']) {
+		const job = lastBuildData['jobs'][i];
+		if (job['name'] == "build") {
+			buildJob = job;
+			break;
+		}
+	}
+	if (buildJob != null) {
+		document.getElementById('lastBuild').innerHTML = '<a href=' + buildJob['html_url'] + '>' + buildJob['html_url'] + '</a>';
+	} else {
+		document.getElementById('lastBuild').innerHTML = '<a href=' + lastBuild['html_url'] + '>' + lastBuild['html_url'] + '</a>';
+	}
+}
+
+async function load() {
+	loadLastBuildLog();
+	const bootstrapPromise = $.get({
+		url: 'https://static.runelite.net/bootstrap.json'
+	});
+	const phubRepoFilesPromise = $.get({
+		url: 'https://api.github.com/repos/runelite/plugin-hub/git/trees/master?recursive=1',
+		datatype: 'application/json'
+	});
+	const bootstrap = await bootstrapPromise;
+	const runeliteVersion = bootstrap['client']['version'];
+	document.getElementById('runeliteVersion').innerHTML = runeliteVersion
+	const manifestPromise = $.get({
+		url: 'https://repo.runelite.net/plugins/' + runeliteVersion + '/manifest.js'
+	});
+	let manifest = await manifestPromise;
+	// Skip this hash thing at the top of the file.
+	manifest = manifest.substring(manifest.indexOf('[{'));
+	manifests = JSON.parse(manifest);
+
+	manifests.forEach(manifest => {
+		manifestPlugins.add(manifest.internalName);
+	});
+
+	const phubRepoFiles = await phubRepoFilesPromise;
+	const checkDisabled = [];
+	phubRepoFiles.tree.forEach(file => {
+		const prefix = 'plugins/';
+		if (!file.path.startsWith(prefix)) return;
+		const internalName = file.path.substring(prefix.length);
+		if (manifestPlugins.has(internalName)) return;
+		checkDisabled.push(internalName);
+	});
+
+	const promises = [];
+	checkDisabled.forEach(internalName => {
+		promises.push($.get({
+			url: 'https://raw.githubusercontent.com/runelite/plugin-hub/master/plugins/' + internalName
+		}).done((result) => {
+			var lines = result.split('\n');
+			var disabled = false;
+			for (i in lines) {
+				const prefix = 'disabled=';
+				if (lines[i].startsWith(prefix)) {
+					disabledPlugins.set(internalName, lines[i].substring(prefix.length));
+					disabled = true;
+					break;
+				}
+			}
+			if (!disabled) brokenPlugins.add(internalName);
+		}));
+	});
+	await Promise.all(promises);
+
+	console.log("manifest plugins: " + manifestPlugins.size);
+	console.log(manifestPlugins);
+	console.log("disabled plugins: " + disabledPlugins.size);
+	console.log(disabledPlugins);
+	console.log("broken plugins: " + brokenPlugins.size);
+	console.log(brokenPlugins);
+
+	brokenPluginsText = '';
+	brokenPlugins.forEach(brokenPlugin => {
+		brokenPluginsText += brokenPlugin + '<br>';
+	});
+	document.getElementById('bla').innerHTML = brokenPluginsText
+}
+load();
+	</script>
+</body>
+</html>
