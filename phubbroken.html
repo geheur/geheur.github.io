@@ -70,7 +70,7 @@ async function load() {
 		datatype: 'application/json'
 	});
 	const bootstrap = await bootstrapPromise;
-	const runeliteVersion = bootstrap['client']['version'];
+	const runeliteVersion = bootstrap['version'];
 	document.getElementById('runeliteVersion').innerHTML = runeliteVersion
 	const manifestPromise = $.get({
 		url: 'https://repo.runelite.net/plugins/' + runeliteVersion + '/manifest.js'
