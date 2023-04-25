@@ -77,7 +77,7 @@ async function load() {
 	});
 	let manifest = await manifestPromise;
 	// Skip this hash thing at the top of the file.
-	manifest = manifest.substring(manifest.indexOf('[{'));
+	manifest = manifest.substring(manifest.indexOf('[{"internalName'));
 	manifests = JSON.parse(manifest);
 
 	manifests.forEach(manifest => {
