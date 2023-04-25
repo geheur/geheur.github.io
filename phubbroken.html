@@ -72,14 +72,24 @@ async function load() {
 	const bootstrap = await bootstrapPromise;
 	const runeliteVersion = bootstrap['version'];
 	document.getElementById('runeliteVersion').innerHTML = runeliteVersion
-	const manifestPromise = $.get({
-		url: 'https://repo.runelite.net/plugins/' + runeliteVersion + '/manifest.js'
-	});
-	let manifest = await manifestPromise;
-	// Skip this hash thing at the top of the file.
-	manifest = manifest.substring(manifest.indexOf('[{"internalName'));
-	manifests = JSON.parse(manifest);
 
+	// apparently jquery cannot handle binary data, so use xmlhttprequest directly.
+	var manifestPromise = new Promise(function (resolve, reject) {
+		var req = new XMLHttpRequest();
+		req.open("GET", 'https://repo.runelite.net/plugins/' + runeliteVersion + '/manifest.js', true);
+		req.responseType = "arraybuffer";
+		req.onload = function(oEvent) {
+			resolve(req.response);
+		};
+		req.send();
+	});
+	var arrayBuffer = await manifestPromise;
+	var hashHeaderLength = new DataView(arrayBuffer).getInt32(0);
+	var manifestTextBuffer = arrayBuffer.slice(hashHeaderLength + 4); // 4 for the initial int read above.
+	// console.log('hashHeaderLength', hashHeaderLength);
+	var manifestText = new TextDecoder("utf-8").decode(manifestTextBuffer);
+	// console.log('manifestText', manifestText);
+	manifests = JSON.parse(manifestText);
 	manifests.forEach(manifest => {
 		manifestPlugins.add(manifest.internalName);
 	});
