@@ -76,7 +76,7 @@ async function load() {
 	// apparently jquery cannot handle binary data, so use xmlhttprequest directly.
 	var manifestPromise = new Promise(function (resolve, reject) {
 		var req = new XMLHttpRequest();
-		req.open("GET", 'https://repo.runelite.net/plugins/' + runeliteVersion + '/manifest.js', true);
+		req.open("GET", 'https://repo.runelite.net/plugins/manifest/' + runeliteVersion + '_full.js', true);
 		req.responseType = "arraybuffer";
 		req.onload = function(oEvent) {
 			resolve(req.response);
@@ -89,7 +89,7 @@ async function load() {
 	// console.log('hashHeaderLength', hashHeaderLength);
 	var manifestText = new TextDecoder("utf-8").decode(manifestTextBuffer);
 	// console.log('manifestText', manifestText);
-	manifests = JSON.parse(manifestText);
+	manifests = JSON.parse(manifestText).display;
 	manifests.forEach(manifest => {
 		manifestPlugins.add(manifest.internalName);
 	});
